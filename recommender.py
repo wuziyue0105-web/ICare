@@ -1,11 +1,15 @@
 '''
 Scores every USU event for one user and one check-in.
 score = Interest Match + Need Fit + Social Fit + Setting Fit + Community Fit + Learned Bonus
+On a good day (no focus area), Good-day Fit is used in place of Need Fit.
 '''
 
 import json
 
-from questions import today_size
+from questions import today_size, focus_area
+
+# Group sizes from smallest to largest, used to measure how far apart two sizes are.
+SIZES = ['small', 'medium', 'large']
 
 
 def load_events(filename):
@@ -27,7 +31,7 @@ def interest_match(user, event, reasons):
     for tag in event['tags']:
         if tag in user['interests']:
             score += 2
-            reasons.append('you enjoy ' + tag)
+            reasons.append(f'you enjoy {tag}')
     return score
 
 
@@ -61,6 +65,26 @@ def need_fit(checkin, event, reasons):
     return score
 
 
+def good_day_fit(user, checkin, event, reasons):
+    '''
+    Points used in place of Need Fit when every area looks fine (focus is 'none').
+    On a good day there is nothing to fix, so the group size that suits today counts for more:
+    the right size gets 2 more points, and a size two steps away (small and large) loses 2 points.
+    '''
+
+    size = today_size(user['personality'], checkin['energy'])
+    # How many steps apart the event's size and today's size are: 0, 1 or 2.
+    gap = abs(SIZES.index(event['size']) - SIZES.index(size))
+
+    if gap == 0:
+        reasons.append(f'you are doing well today, so a {size} group that fits you is ranked higher')
+        return 2
+    elif gap == 2:
+        reasons.append(f'a {event["size"]} group is far from the {size} group that suits you today')
+        return -2
+    return 0
+
+
 def social_fit(user, checkin, event, reasons):
     '''
     Points when the group size suits today, a penalty for a large crowd on a low-energy day.
@@ -71,7 +95,7 @@ def social_fit(user, checkin, event, reasons):
 
     if event['size'] == size:
         score += 2
-        reasons.append('a ' + size + ' group suits your energy today')
+        reasons.append(f'a {size} group suits your energy today')
     if checkin['energy'] <= 4 and event['size'] == 'large':
         score -= 2
     return score
@@ -105,7 +129,7 @@ def community_fit(user, event, reasons):
     '''
 
     if event['community'] in user['communities']:
-        reasons.append('it is part of the ' + event['community'] + ' community you chose')
+        reasons.append(f'it is part of the {event["community"]} community you chose')
         return 2
     return 0
 
@@ -120,9 +144,9 @@ def learned_bonus(user, event, reasons):
         bonus += user['learned'].get(tag, 0)
 
     if bonus > 0:
-        reasons.append('you liked similar events before (+' + str(bonus) + ')')
+        reasons.append(f'you liked similar events before (+{bonus})')
     elif bonus < 0:
-        reasons.append('you did not enjoy similar events before (' + str(bonus) + ')')
+        reasons.append(f'you did not enjoy similar events before ({bonus})')
     return bonus
 
 
@@ -139,7 +163,11 @@ def score_event(user, checkin, event):
     reasons = []
     score = 0
     score += interest_match(user, event, reasons)
-    score += need_fit(checkin, event, reasons)
+    # Need Fit helps with a hard day; Good-day Fit replaces it when nothing stands out.
+    if focus_area(checkin) == 'none':
+        score += good_day_fit(user, checkin, event, reasons)
+    else:
+        score += need_fit(checkin, event, reasons)
     score += social_fit(user, checkin, event, reasons)
     score += setting_fit(user, event, reasons)
     score += community_fit(user, event, reasons)
