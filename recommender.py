@@ -1,6 +1,6 @@
 '''
 Scores every USU event for one user and one check-in.
-score = Interest Match + Need Fit + Social Fit + Setting Fit + Community Fit + Learned Bonus
+score = Interest Match + Need Fit + Social Fit + Setting Fit + Learned Bonus
 On a good day (no focus area), Good-day Fit is used in place of Need Fit.
 '''
 
@@ -123,17 +123,6 @@ def setting_fit(user, event, reasons):
     return score
 
 
-def community_fit(user, event, reasons):
-    '''
-    Two points when the event belongs to a community the user chose.
-    '''
-
-    if event['community'] in user['communities']:
-        reasons.append(f'it is part of the {event["community"]} community you chose')
-        return 2
-    return 0
-
-
 def learned_bonus(user, event, reasons):
     '''
     Add the learned weight of every tag, built from the user's past ratings.
@@ -170,7 +159,6 @@ def score_event(user, checkin, event):
         score += need_fit(checkin, event, reasons)
     score += social_fit(user, checkin, event, reasons)
     score += setting_fit(user, event, reasons)
-    score += community_fit(user, event, reasons)
     score += learned_bonus(user, event, reasons)
     return score, reasons
 
