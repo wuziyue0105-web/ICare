@@ -16,7 +16,6 @@ USERS_FOLDER = 'users'
 # The tags used in events.json, so every interest can actually be matched.
 INTERESTS = ['art', 'music', 'dance', 'film', 'food', 'games', 'sport', 'outdoor',
              'language', 'study', 'career', 'volunteering', 'party', 'wellness']
-COMMUNITIES = ['faith', 'cultural', 'women']
 
 # Learned weights stay in this range so one rating cannot take over.
 LEARNED_MIN = -3
@@ -58,7 +57,6 @@ def new_user(username, salt, password_hash):
         'interests': [],
         'setting': None,
         'atmosphere': None,
-        'communities': [],
         'learned': {},
         'ratings': {},
         'checkins': [],
