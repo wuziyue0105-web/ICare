@@ -1,4 +1,4 @@
-# ICare -- Self-assessment of Wellbeing with Personalized Activity Match
+# ICare -- Check In, Match Up: Personalised Activities for Your Wellbeing
 
 COMP9001 Final Project. SID: 560769023
 
