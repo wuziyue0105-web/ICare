@@ -1,26 +1,40 @@
 '''
 Web version of the Campus Wellbeing Recommender.
 Runs a small server on this computer and opens the app in the browser.
-All scoring, saving and recommending is done by the same modules main.py uses;
-this file only passes answers between the page (web/) and those modules.
+Scoring, saving and recommending are done by the other modules;
+this file passes answers between the page (web/) and those modules.
+This is the main script: run it to start the program.
 Run with: python3 web_app.py
 '''
 
 import datetime
 import json
 import os
+import threading
 import webbrowser
+from http.cookies import SimpleCookie, CookieError
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
 from questions import (PSS4_QUESTIONS, WHO5_QUESTIONS, UCLA3_QUESTIONS, DAYS,
                        score_pss4, score_who5, score_ucla3, today_size,
                        overall_state, focus_area, needs_support)
-from user_profile import (INTERESTS, COMMUNITIES, load_user, save_user,
-                          add_checkin, update_learned)
+from user_profile import (INTERESTS, COMMUNITIES, MAX_NAME_LENGTH, clean_name, new_user,
+                          load_user, find_user, save_user, add_checkin, update_learned)
 from recommender import load_events, recommend
-from display import level, FOCUS_TEXT, SUPPORT_LINK
+from auth import (AuthError, SESSION_SECONDS, check_username, check_new_password, hash_password,
+                  check_password, create_session, get_session, end_session)
 
 PORT = 8001
+SESSION_COOKIE = 'session'
+SUPPORT_LINK = 'https://sydney.edu.au/students/counselling-and-mental-health-support.html'
+
+FOCUS_TEXT = {
+    'stress': 'stress is your biggest load right now.',
+    'mood': 'your mood is the area to look after first.',
+    'belonging': 'feeling isolated is your main concern today.',
+    'confidence': 'your confidence could use a boost.',
+    'none': 'nothing stands out today, keep doing what works for you.',
+}
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB_FOLDER = os.path.join(HERE, 'web')
 
@@ -40,6 +54,9 @@ ATMOSPHERES = ['quiet', 'active', 'either']
 LOWER_IS_BETTER = {'stress': True, 'mood': False, 'belonging': True,
                    'energy': False, 'confidence': False}
 
+# Stops two requests creating two accounts with one username.
+new_account_lock = threading.Lock()
+
 
 class InputError(Exception):
     '''
@@ -47,15 +64,10 @@ class InputError(Exception):
     '''
 
 
-def check_name(name):
+class SignInRequired(Exception):
     '''
-    Return the name in lower case if it is letters and digits only, otherwise raise InputError.
+    Raised when a request needs a signed-in user and has none.
     '''
-
-    name = str(name).strip().lower()
-    if not name.isalnum():
-        raise InputError('Please use letters and digits only, with no spaces.')
-    return name
 
 
 def check_int(value, low, high, what):
@@ -64,7 +76,7 @@ def check_int(value, low, high, what):
     '''
 
     if type(value) != int or not low <= value <= high:
-        raise InputError(what + ' must be a whole number from ' + str(low) + ' to ' + str(high) + '.')
+        raise InputError(f'{what} must be a whole number from {low} to {high}.')
     return value
 
 
@@ -74,9 +86,9 @@ def check_answers(values, count, low, high, what):
     '''
 
     if type(values) != list or len(values) != count:
-        raise InputError('Please answer every ' + what + ' question.')
+        raise InputError(f'Please answer every {what} question.')
     for value in values:
-        check_int(value, low, high, what + ' answers')
+        check_int(value, low, high, f'{what} answers')
     return values
 
 
@@ -86,11 +98,11 @@ def check_list(values, options, what):
     '''
 
     if type(values) != list:
-        raise InputError(what + ' must be a list.')
+        raise InputError(f'{what} must be a list.')
     chosen = []
     for value in values:
         if value not in options:
-            raise InputError('Not recognised: ' + str(value) + '.')
+            raise InputError(f'Not recognised: {value}.')
         if value not in chosen:
             chosen.append(value)
     return chosen
@@ -114,6 +126,19 @@ def public_user(user):
     }
 
 
+def level(value, cut_low, cut_high, words):
+    '''
+    Return words[0] if value <= cut_low, words[1] if value <= cut_high, otherwise words[2].
+    '''
+
+    if value <= cut_low:
+        return words[0]
+    elif value <= cut_high:
+        return words[1]
+    else:
+        return words[2]
+
+
 def card_row(key, label, value, low, high, cuts, verdict, meaning):
     '''
     Return one row of the state card as a dictionary.
@@ -126,7 +151,7 @@ def card_row(key, label, value, low, high, cuts, verdict, meaning):
 
 def state_card(user, checkin):
     '''
-    Return today's state card: the same bands and words as show_card in display.py.
+    Return today's state card.
     '''
 
     size = today_size(user['personality'], checkin['energy'])
@@ -148,7 +173,7 @@ def state_card(user, checkin):
                  'Higher means more confident'),
         card_row('energy', 'Social energy', checkin['energy'], 1, 10, [4, 7],
                  level(checkin['energy'], 4, 7, ['Low energy', 'Medium energy', 'High energy']),
-                 size.title() + ' groups suit you today'),
+                 f'{size.title()} groups suit you today'),
     ]
 
     # Compare with the check-in before this one, if there is one.
@@ -200,24 +225,64 @@ def public_results(results):
     return output
 
 
-def handle_signin(body, events):
+def require_profile(user):
     '''
-    Return the saved user, or say that this name is new.
-    '''
-
-    name = check_name(body.get('name', ''))
-    user = load_user(name)
-    if user is None:
-        return {'is_new': True, 'name': name, 'user': None}
-    return {'is_new': False, 'name': name, 'user': public_user(user)}
-
-
-def handle_profile(body, events):
-    '''
-    Save the profile answers, keeping what was learned and the history.
+    Raise InputError if this user has not saved a profile yet.
     '''
 
-    name = check_name(body.get('name', ''))
+    if user['personality'] is None:
+        raise InputError('Please set up your profile first.')
+
+
+def session_data(user):
+    '''
+    Return what the page needs to know about the person signed in.
+    '''
+
+    is_new = user['personality'] is None
+    return {'username': user['username'], 'is_new': is_new,
+            'user': None if is_new else public_user(user)}
+
+
+def handle_register(body):
+    '''
+    Create an account and start a session, returning the session's token with the user.
+    The account is saved now, so the password is kept before the profile is filled in.
+    '''
+
+    username = check_username(body.get('username', ''))
+    password = body.get('password')
+    check_new_password(password)
+    salt, password_hash = hash_password(password)
+    with new_account_lock:
+        if find_user(username) is not None:
+            raise AuthError('That username is taken.')
+        user = new_user(username, salt, password_hash)
+        save_user(user)
+    return create_session(user['id']), session_data(user)
+
+
+def handle_login(body):
+    '''
+    Check the password and start a session, returning the session's token with the user.
+    The message does not say which part was wrong, so it cannot confirm that a username exists.
+    '''
+
+    username = str(body.get('username', '')).strip().lower()
+    user = find_user(username)
+    if user is None or not check_password(body.get('password', ''), user['salt'], user['password_hash']):
+        raise AuthError('Wrong username or password.')
+    return create_session(user['id']), session_data(user)
+
+
+def handle_profile(user, body, events):
+    '''
+    Save the profile answers. Everything else in the user's file stays as it is.
+    '''
+
+    name = clean_name(body.get('name', ''))
+    if name == '':
+        raise InputError(f'Please enter a name of up to {MAX_NAME_LENGTH} characters.')
     personality = body.get('personality')
     setting = body.get('setting')
     atmosphere = body.get('atmosphere')
@@ -230,35 +295,24 @@ def handle_profile(body, events):
         raise InputError('Please choose at least one interest.')
     communities = check_list(body.get('communities', []), COMMUNITIES, 'Communities')
 
-    user = {
+    user.update({
         'name': name,
         'personality': personality,
         'interests': interests,
         'setting': setting,
         'atmosphere': atmosphere,
         'communities': communities,
-        'learned': {},
-        'ratings': {},
-        'checkins': [],
-    }
-    old = load_user(name)
-    if old is not None:
-        user['learned'] = old['learned']
-        user['ratings'] = old['ratings']
-        user['checkins'] = old['checkins']
+    })
     save_user(user)
     return {'user': public_user(user)}
 
 
-def handle_checkin(body, events):
+def handle_checkin(user, body, events):
     '''
     Score the answers, save the check-in and return the state card and recommendations.
     '''
 
-    name = check_name(body.get('name', ''))
-    user = load_user(name)
-    if user is None:
-        raise InputError('Please set up your profile first.')
+    require_profile(user)
 
     pss = check_answers(body.get('pss'), len(PSS4_QUESTIONS), 0, 4, 'stress')
     who = check_answers(body.get('who'), len(WHO5_QUESTIONS), 0, 5, 'mood')
@@ -292,15 +346,12 @@ def handle_checkin(body, events):
     }
 
 
-def handle_feedback(body, events):
+def handle_feedback(user, body, events):
     '''
     Update the learned weights from the 1-3 ratings and save them.
     '''
 
-    name = check_name(body.get('name', ''))
-    user = load_user(name)
-    if user is None:
-        raise InputError('Please sign in again.')
+    require_profile(user)
 
     ratings = body.get('ratings', {})
     if type(ratings) != dict or len(ratings) == 0:
@@ -312,7 +363,7 @@ def handle_feedback(body, events):
 
     for event_name in ratings:
         if event_name not in by_name:
-            raise InputError('Unknown event: ' + str(event_name))
+            raise InputError(f'Unknown event: {event_name}')
         rating = check_int(ratings[event_name], 1, 3, 'Ratings')
         update_learned(user, by_name[event_name], rating)
     save_user(user)
@@ -335,8 +386,15 @@ def handle_meta(events):
     }
 
 
+# These start a session.
+SIGN_IN_ROUTES = {
+    '/api/register': handle_register,
+    '/api/login': handle_login,
+}
+
+# These work only for a signed-in session. The user always comes from the
+# session cookie, never from the request body, so nobody can act as someone else.
 ROUTES = {
-    '/api/signin': handle_signin,
     '/api/profile': handle_profile,
     '/api/checkin': handle_checkin,
     '/api/feedback': handle_feedback,
@@ -351,42 +409,107 @@ class Handler(SimpleHTTPRequestHandler):
     events = []
 
     def __init__(self, *args, **kwargs):
+        '''
+        Set up the handler so that page files are served from the web/ folder only.
+        '''
+
         super().__init__(*args, directory=WEB_FOLDER, **kwargs)
 
-    def send_json(self, status, data):
+    def end_headers(self):
         '''
-        Send data back to the page as JSON.
+        Add a no-cache header to every response before the headers are finished.
+        '''
+
+        # Browsers must not keep old pages after an update, or copies of private answers.
+        self.send_header('Cache-Control', 'no-store')
+        super().end_headers()
+
+    def session_token(self):
+        '''
+        Return the session token from the request's cookie, or None if there is none.
+        '''
+
+        try:
+            morsel = SimpleCookie(self.headers.get('Cookie', '')).get(SESSION_COOKIE)
+        except CookieError:
+            return None
+        return None if morsel is None else morsel.value
+
+    def session_user(self):
+        '''
+        Return the signed-in user, or None if this request has no live session.
+        '''
+
+        session = get_session(self.session_token())
+        if session is None:
+            return None
+        return load_user(session['user_id'])
+
+    def send_json(self, status, data, token=None, cookie_seconds=SESSION_SECONDS):
+        '''
+        Send data back to the page as JSON, setting the session cookie if a token is given.
+        HttpOnly keeps it away from scripts; SameSite stops other sites sending it.
         '''
 
         text = json.dumps(data).encode('utf-8')
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(text)))
+        if token is not None:
+            self.send_header('Set-Cookie', f'{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={cookie_seconds}')
         self.end_headers()
         self.wfile.write(text)
 
     def do_GET(self):
+        '''
+        Answer GET requests: the questions (/api/meta), who is signed in (/api/session),
+        or a page file from web/.
+        '''
+
         if self.path == '/api/meta':
             self.send_json(200, handle_meta(self.events))
+        elif self.path == '/api/session':
+            user = self.session_user()
+            self.send_json(200, {'username': None} if user is None else session_data(user))
         else:
             super().do_GET()
 
     def do_POST(self):
-        if self.path not in ROUTES:
-            self.send_json(404, {'error': 'Not found.'})
-            return
+        '''
+        Answer POST requests: read the JSON body, pass it to the matching handle_ function,
+        and turn any error into a JSON error message instead of crashing the server.
+        '''
+
         try:
             length = int(self.headers.get('Content-Length', 0))
             body = json.loads(self.rfile.read(length) or b'{}')
             if type(body) != dict:
                 raise InputError('Expected a JSON object.')
-            self.send_json(200, ROUTES[self.path](body, self.events))
-        except InputError as error:
+            if self.path in SIGN_IN_ROUTES:
+                token, data = SIGN_IN_ROUTES[self.path](body)
+                self.send_json(200, data, token)
+            elif self.path == '/api/signout':
+                end_session(self.session_token())
+                self.send_json(200, {}, '', 0)
+            elif self.path in ROUTES:
+                user = self.session_user()
+                if user is None:
+                    raise SignInRequired()
+                self.send_json(200, ROUTES[self.path](user, body, self.events))
+            else:
+                self.send_json(404, {'error': 'Not found.'})
+        except (InputError, AuthError) as error:
             self.send_json(400, {'error': str(error)})
+        except SignInRequired:
+            self.send_json(401, {'error': 'Please sign in again.'})
         except json.JSONDecodeError:
             self.send_json(400, {'error': 'Expected a JSON object.'})
 
     def log_message(self, format, *args):
+        '''
+        Turn off the default log line printed for every request.
+        '''
+
         # Keep the terminal quiet; only startup messages are printed.
         pass
 
@@ -400,10 +523,17 @@ def main():
     os.chdir(HERE)
     Handler.events = load_events('events.json')
 
+    url = f'http://127.0.0.1:{PORT}/'
+
     # Only this computer can reach the server.
-    server = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
-    url = 'http://127.0.0.1:' + str(PORT) + '/'
-    print('Campus Wellbeing is running at ' + url)
+    try:
+        server = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
+    except OSError:
+        print(f'Port {PORT} is in use, so the app may already be running. Opening {url}')
+        webbrowser.open(url)
+        return
+
+    print(f'Campus Wellbeing is running at {url}')
     print('Press Ctrl+C to stop.')
     webbrowser.open(url)
     try:
