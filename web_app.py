@@ -1,5 +1,5 @@
 '''
-Web version of the Campus Wellbeing Recommender.
+Web version of ICare.
 Runs a small server on this computer and opens the app in the browser.
 Scoring, saving and recommending are done by the other modules;
 this file passes answers between the page (web/) and those modules.
