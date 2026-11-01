@@ -81,7 +81,7 @@ The tests use a temporary folder, so they never change `users/`.
    event is scored, and the top three are shown with the reasons they scored:
 
    ```
-   score = Interest Match + Need Fit + Social Fit + Setting Fit + Community Fit + Learned Bonus
+   score = Interest Match + Need Fit + Social Fit + Setting Fit + Learned Bonus
    ```
 
    Need Fit favours events that help with the area you are struggling in.
