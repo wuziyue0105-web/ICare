@@ -18,7 +18,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from questions import (PSS4_QUESTIONS, WHO5_QUESTIONS, UCLA3_QUESTIONS, DAYS,
                        score_pss4, score_who5, score_ucla3, today_size,
                        overall_state, focus_area, needs_support)
-from user_profile import (INTERESTS, COMMUNITIES, MAX_NAME_LENGTH, clean_name, new_user,
+from user_profile import (INTERESTS, MAX_NAME_LENGTH, clean_name, new_user,
                           load_user, find_user, save_user, add_checkin, update_learned)
 from recommender import load_events, recommend
 from auth import (AuthError, SESSION_SECONDS, check_username, check_new_password, hash_password,
@@ -119,7 +119,6 @@ def public_user(user):
         'interests': user['interests'],
         'setting': user['setting'],
         'atmosphere': user['atmosphere'],
-        'communities': user['communities'],
         'learned': user['learned'],
         'ratings': user['ratings'],
         'checkins': user['checkins'],
@@ -293,7 +292,6 @@ def handle_profile(user, body, events):
     interests = check_list(body.get('interests', []), INTERESTS, 'Interests')
     if len(interests) == 0:
         raise InputError('Please choose at least one interest.')
-    communities = check_list(body.get('communities', []), COMMUNITIES, 'Communities')
 
     user.update({
         'name': name,
@@ -301,7 +299,6 @@ def handle_profile(user, body, events):
         'interests': interests,
         'setting': setting,
         'atmosphere': atmosphere,
-        'communities': communities,
     })
     save_user(user)
     return {'user': public_user(user)}
@@ -380,7 +377,6 @@ def handle_meta(events):
         'who': {'questions': WHO5_QUESTIONS, 'choices': WHO5_CHOICES},
         'ucla': {'questions': UCLA3_QUESTIONS, 'choices': UCLA3_CHOICES},
         'interests': INTERESTS,
-        'communities': COMMUNITIES,
         'days': DAYS,
         'event_count': len(events),
     }
