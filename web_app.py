@@ -529,7 +529,7 @@ def main():
         webbrowser.open(url)
         return
 
-    print(f'Campus Wellbeing is running at {url}')
+    print(f'ICare is running at {url}')
     print('Press Ctrl+C to stop.')
     webbrowser.open(url)
     try:
