@@ -1,4 +1,4 @@
-// Campus Wellbeing — the page side.
+// ICare — the page side.
 // Every score, recommendation and saved file comes from the Python server (web_app.py).
 
 const view = document.getElementById('view');
