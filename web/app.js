@@ -642,7 +642,7 @@ document.querySelectorAll('.side [data-action="signout"]').forEach((button) => b
       state.view = session.is_new ? 'profile' : 'welcome';
     }
   } catch (error) {
-    view.innerHTML = `<div class="page"><div class="title"><h1 class="sans">Campus Wellbeing</h1><p class="lede">${esc(error.message)} Start it with: python3 web_app.py</p></div></div>`;
+    view.innerHTML = `<div class="page"><div class="title"><h1 class="sans">ICare</h1><p class="lede">${esc(error.message)} Start it with: python3 web_app.py</p></div></div>`;
     return;
   }
   render();
