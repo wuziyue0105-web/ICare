@@ -1,4 +1,4 @@
-// Campus Wellbeing: ink painting on xuan paper, after the spirit of Bada Shanren.
+// ICare: ink painting on xuan paper, after the spirit of Bada Shanren.
 //
 // Everything decorative is painted here with Canvas2D and handed to the page as a
 // finished canvas or image. Nothing in this file touches the app's state or the server.
