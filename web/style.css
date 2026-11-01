@@ -1,0 +1,379 @@
+/* Campus Wellbeing: xieyi ink painting, after the spirit of Bada Shanren.
+
+   The whole page is one sheet of xuan paper. Three colours only: paper, ink, seal red.
+   Depth of ink is always the same ink at a different alpha.
+   No cards, no frames, no shadows, no rounded corners. Things are separated by empty
+   paper, by one dry stroke of the brush, or by a very pale pool of ink.
+
+   The brush marks are painted by ink.js, which hands them over as these variables:
+     --dry-line, --dry-line-pale   long horizontal strokes with flying white
+     --dry-line-short, --dry-line-pale-short   the same for short words
+     --dry-line-tall               the vertical stroke beside the side rail
+     --score-line                  the score stroke, pale to dense
+     --ink-wash                    a very pale pool of ink */
+
+/* ---------- colour: requirement "only three colours" ---------- */
+:root {
+  --paper: #efe9da;
+  --seal: #b72a20;
+  --ink-rgb: 20, 17, 14;           /* #14110e */
+
+  --ink-dense: rgba(var(--ink-rgb), 0.9);
+  --ink-mid: rgba(var(--ink-rgb), 0.55);
+  --ink-pale: rgba(var(--ink-rgb), 0.25);
+  --ink-faint: rgba(var(--ink-rgb), 0.08);
+
+  --body-text: rgba(var(--ink-rgb), 0.85);
+  --quiet-text: rgba(var(--ink-rgb), 0.64); /* the brief's 0.6, raised a little to stay AA on washed paper */
+
+  /* Type: requirement "Instrument Serif headings, Instrument Sans body" */
+  --serif: "Instrument Serif", Baskerville, Georgia, serif;
+  --sans: "Instrument Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  --fs-title: 64px;
+  --gap: 28px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+
+/* Paper: requirement "fibre noise at about 0.06 with multiply" and "edges very slightly darker" */
+body {
+  background: var(--paper);
+  color: var(--body-text);
+  font: 400 15px/24px var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  opacity: 0.06; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.05 .42' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .08 0 0 0 0 .07 0 0 0 0 .05 0 0 0 1.1 -.1'/%3E%3C/filter%3E%3Crect width='320' height='320' filter='url(%23p)'/%3E%3C/svg%3E");
+}
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: 10; pointer-events: none;
+  box-shadow: inset 0 0 160px rgba(var(--ink-rgb), 0.07);
+}
+
+button, input { font: inherit; color: inherit; border-radius: 0; }
+a { color: var(--seal); }
+:focus-visible { outline: 2px solid var(--ink-dense); outline-offset: 3px; }
+.num { font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }
+.muted, .small { color: var(--quiet-text); }
+.small { font-size: 13px; line-height: 20px; }
+
+/* ---------- layout: requirement "the side rail is paper too, with one vertical pale stroke" ---------- */
+.frame { display: grid; grid-template-columns: 188px minmax(0, 1fr); min-height: 100vh; }
+.side {
+  position: sticky; top: 0; height: 100vh;
+  display: flex; flex-direction: column; gap: 24px;
+  padding: 56px 24px 36px 32px;
+  background: var(--dry-line-tall) right top / 7px 100% no-repeat;
+}
+.menu-button { display: none; }
+.nav { display: flex; flex-direction: column; gap: 14px; }
+.nav a { padding: 4px 0 10px; color: var(--ink-mid); text-decoration: none; }
+.nav a:hover { color: var(--ink-dense); }
+/* Requirement: the current page has a stroke of ink under its word */
+.nav a[aria-current="page"] {
+  color: var(--ink-dense);
+  background: var(--dry-line-short) left bottom / 100% 7px no-repeat;
+}
+.nav-signout { display: none; }
+.side-foot { margin-top: auto; }
+.who { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.avatar { display: none; }
+.who-name { color: var(--ink-dense); }
+
+.sheet { display: flex; flex-direction: column; min-width: 0; min-height: 100vh; }
+main { flex: 1; padding: 72px 64px 72px; }
+main:focus, main:focus-visible { outline: none; }
+.page {
+  max-width: 1120px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--gap);
+  align-items: start;
+}
+.span-12 { grid-column: span 12; }
+.span-8 { grid-column: span 8; }
+.span-7 { grid-column: span 7; }
+.span-6 { grid-column: span 6; }
+.span-5 { grid-column: span 5; }
+.span-4 { grid-column: span 4; }
+.span-3 { grid-column: span 3; }
+
+/* Requirement: the footer sentence stays, plainly visible */
+.foot { padding: 0 64px 28px; }
+.note { margin: 0; color: var(--quiet-text); font-size: 13px; }
+
+/* ---------- headings: requirement "large serif, one dry stroke at about 60% of the title width" ---------- */
+.hero { position: relative; display: flex; justify-content: space-between; gap: 32px; min-height: 340px; margin-bottom: 36px; }
+.hero.compact { min-height: 0; margin-bottom: 8px; }
+.hero-text { min-width: 0; padding-top: 28px; position: relative; z-index: 1; }
+h1 {
+  display: inline-block; margin: 0; padding-bottom: 20px;
+  font: 400 var(--fs-title)/1.04 var(--serif);
+  letter-spacing: -0.012em; color: var(--ink-dense);
+  background: var(--dry-line-short) left bottom / 60% 12px no-repeat;
+}
+.lede { margin: 22px 0 0; font-size: 18px; line-height: 28px; max-width: 40ch; color: var(--body-text); }
+.lede strong { font-weight: 500; color: var(--ink-dense); }
+.stamp { display: block; margin-top: 14px; color: var(--quiet-text); font-size: 13px; }
+h2 { margin: 0; font: 400 26px/32px var(--serif); color: var(--ink-dense); }
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 26px; }
+.panel-head .meta, .meta { color: var(--quiet-text); font-size: 13px; }
+
+/* ---------- paintings ---------- */
+/* The picture hangs off the right edge of the title. It never takes pointer events,
+   so it can never stand in the way of a control. */
+.ink-art {
+  position: relative; flex: none; width: 300px; height: 488px; margin: -40px 0 -130px;
+  pointer-events: none; user-select: none;
+}
+.painting { position: absolute; inset: 0; }
+.painting canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* Each painting keeps its own size; the eye is an element so it can turn */
+.ink-art[data-art="fish"] { width: 260px; height: 130px; margin: 0; }
+.ink-art[data-art="orchid"] { width: 300px; height: 280px; margin: -20px 0 0; }
+.pupil {
+  position: absolute; aspect-ratio: 1; background: rgb(var(--ink-rgb)); border-radius: 50%;
+  /* At rest the eye looks up and aside. glance() in ink.js turns it now and then. */
+  transform: translate(-50%, -50%) translate(var(--look-x, 2.6px), var(--look-y, -2.2px));
+}
+
+/* ---------- buttons ---------- */
+.actions { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; }
+/* Primary: a seal pressed on the paper. The slightly uneven edge is a clip-path. */
+.button {
+  height: 44px; padding: 0 22px; border: 0; cursor: pointer; font-weight: 500;
+  display: inline-flex; align-items: center; text-decoration: none; background: none;
+}
+.button.primary {
+  background: var(--seal); color: #fff;
+  clip-path: polygon(0.6% 3%, 34% 0, 71% 2.5%, 99.4% 0.5%, 100% 52%, 99% 97%, 62% 100%, 28% 97.5%, 0.4% 100%, 0 46%);
+}
+/* A clip-path cuts off an outside outline, so the focus ring sits inside the seal */
+.button.primary:focus-visible { outline: 2px solid var(--paper); outline-offset: -6px; }
+/* Secondary: no frame, one pale stroke under the words that goes dense on hover */
+.button.secondary {
+  padding: 0 2px 6px; color: var(--ink-dense);
+  background: var(--dry-line-pale-short) left bottom / 100% 6px no-repeat;
+}
+.button.secondary:hover { background-image: var(--dry-line-short); }
+.button[aria-disabled="true"] {
+  background: none; color: var(--quiet-text); cursor: not-allowed; clip-path: none;
+  box-shadow: inset 0 0 0 1px var(--ink-pale);
+}
+.text-button {
+  background: none; border: 0; padding: 4px 0; cursor: pointer;
+  color: var(--quiet-text); font-size: 14px; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--ink-pale);
+}
+.text-button:hover { color: var(--ink-dense); text-decoration-color: currentColor; }
+/* Requirement: errors stay. They are a warning, so they may use seal red. */
+.form-error { color: var(--seal); font-size: 14px; font-weight: 500; min-height: 22px; margin: 12px 0 0; }
+
+/* ---------- inputs: requirement "only one stroke of ink under the field" ---------- */
+.field { margin-bottom: 22px; }
+.field label { display: block; color: var(--quiet-text); margin-bottom: 4px; font-size: 14px; }
+.input {
+  width: 100%; max-width: 380px; height: 44px; padding: 0 2px; border: 0; color: var(--ink-dense);
+  background: var(--dry-line) left bottom / 100% 7px no-repeat;
+}
+.input:focus { outline: none; box-shadow: 0 2px 0 var(--ink-dense); }
+.hint { margin: 8px 0 0; font-size: 13px; color: var(--quiet-text); }
+
+/* ---------- choices: requirement "paper with a faint ring; chosen, solid ink" ---------- */
+.choices { display: flex; flex-wrap: wrap; gap: 8px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.choice { position: relative; }
+.choice input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.choice span {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 38px; padding: 7px 16px; font-size: 14px; line-height: 20px; text-align: center;
+  color: var(--body-text); box-shadow: inset 0 0 0 1px var(--ink-pale);
+}
+.choice:hover span { box-shadow: inset 0 0 0 1px var(--ink-mid); }
+.choice input:checked + span { background: rgba(var(--ink-rgb), 0.92); color: var(--paper); box-shadow: none; }
+.choice input:focus-visible + span { outline: 2px solid var(--ink-dense); outline-offset: 2px; }
+.choices.numbers .choice span { width: 40px; padding: 7px 0; }
+
+/* ---------- scores: requirement "large numbers; a stroke from pale to dense; a small red dot" ---------- */
+.tile { display: flex; flex-direction: column; min-width: 0; margin-bottom: 44px; }
+.tile .label { color: var(--quiet-text); font-size: 14px; }
+.tile .value { font: 400 56px/60px var(--serif); color: var(--ink-dense); margin-top: 4px; }
+.tile .value .of { font: 400 16px/1 var(--sans); color: var(--quiet-text); }
+.tile .verdict { color: var(--ink-dense); margin-top: 6px; }
+.tile .verdict.alert { color: var(--seal); font-weight: 500; }
+.track { position: relative; height: 18px; margin-top: 14px; background: var(--score-line) left center / 100% 9px no-repeat; }
+.track .line, .track .fill, .track .cut { display: none; }
+.track .dot { position: absolute; top: 5px; width: 8px; height: 8px; margin-left: -4px; background: var(--seal); border-radius: 50%; }
+.track-ends { display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; color: var(--quiet-text); }
+
+/* ---------- support: requirement "unmissable in the empty paper, dense ink bar, red links" ---------- */
+.notice {
+  display: grid; gap: 10px; margin: 0 0 56px; max-width: 760px;
+  padding: 2px 0 2px 28px; color: var(--ink-dense); font-size: 18px; line-height: 28px;
+  border-left: 5px solid var(--ink-dense);
+}
+.notice p { margin: 0; }
+.notice b { font-weight: 600; }
+.notice .contacts { display: flex; flex-wrap: wrap; gap: 6px 30px; }
+.notice a { color: var(--seal); font-weight: 600; text-underline-offset: 4px; }
+
+/* ---------- events: requirement "a dry stroke between each one; the match is a small square seal" ---------- */
+.recs { display: grid; }
+.rec {
+  display: grid; grid-template-columns: minmax(0, 1fr) 48px; gap: 8px 28px;
+  padding: 30px 0 34px; background: var(--dry-line) left bottom / 100% 10px no-repeat;
+}
+.rec > * { min-width: 0; }
+.rec:first-child { padding-top: 0; }
+.rec h3 { margin: 0; font: 400 24px/30px var(--serif); }
+.rec h3 a { color: var(--ink-dense); text-decoration: none; }
+.rec h3 a:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.rec .club { color: var(--quiet-text); font-size: 14px; }
+.rec .facts { display: flex; flex-wrap: wrap; gap: 2px 20px; margin-top: 10px; font-size: 14px; }
+.rec .facts span { overflow-wrap: anywhere; }
+.rec .score {
+  grid-column: 2; grid-row: 1; width: 48px; height: 48px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--seal); color: #fff;
+  clip-path: polygon(2% 3%, 52% 0, 98% 2%, 100% 49%, 97% 98%, 44% 100%, 1% 97%, 0 51%);
+}
+.rec .score b { font: 400 22px/22px var(--serif); }
+.rec .score span { font-size: 10px; line-height: 12px; }
+.rec-why { grid-column: 1 / -1; }
+.rec .why { margin: 6px 0 0; padding: 0; list-style: none; font-size: 14px; }
+.rec .why li { color: var(--body-text); }
+.more { margin-top: 6px; font-size: 14px; }
+.more summary { cursor: pointer; color: var(--quiet-text); }
+.rec .rate {
+  grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+  margin: 14px 0 0; padding: 0; border: 0; min-width: 0;
+}
+.rec .rate .q { padding: 0; color: var(--quiet-text); font-size: 14px; }
+.save-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-top: 28px; }
+
+/* ---------- the rail: requirement "a pale pool of ink behind a block" ---------- */
+.rail {
+  display: grid; gap: 44px; min-width: 0; padding: 36px 32px;
+  background: var(--ink-wash) center / 100% 100% no-repeat;
+}
+.rail-block p { margin: 6px 0 0; }
+.rail-block h2 { font-size: 21px; line-height: 26px; }
+.big-num { display: block; margin-top: 4px; font: 400 56px/60px var(--serif); color: var(--ink-dense); }
+.big-num .of { font: 400 16px/1 var(--sans); color: var(--quiet-text); }
+.kv { display: grid; gap: 4px; margin: 8px 0 0; }
+.kv div { display: flex; justify-content: space-between; gap: 12px; }
+.kv dt { color: var(--quiet-text); }
+.kv dd { margin: 0; text-align: right; }
+.up { color: var(--ink-dense); font-weight: 600; }   /* requirement: better and worse are told apart by ink */
+.down { color: var(--seal); }
+.same { color: var(--quiet-text); }
+
+/* ---------- sign in: requirement "rock and bird at the lower left", the form across the paper ---------- */
+.signin-left { position: relative; min-height: 700px; }
+.signin .hero { min-height: 0; margin: 0; }
+.signin .ink-art { position: absolute; left: 0; bottom: 0; margin: 0; width: 420px; height: 400px; }
+.signin-right { padding-top: 56px; display: grid; gap: 84px; }
+#auth-form h2 { margin-bottom: 30px; }
+.journey { margin: 16px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+
+/* ---------- welcome ---------- */
+.parts { margin: 0 0 32px; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 32px; color: var(--quiet-text); }
+.so-far { margin-top: 56px; }
+.medals { display: flex; flex-wrap: wrap; gap: 20px 56px; margin: 18px 0 0; }
+.medals dd { margin: 0; font: 400 44px/48px var(--serif); color: var(--ink-dense); }
+.medals dd.word { font-size: 26px; }
+.medals dt { color: var(--quiet-text); font-size: 14px; }
+
+/* ---------- profile: questions separated only by empty paper ---------- */
+.hero.plain { min-height: 0; }
+.profile-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 52px var(--gap); }
+.q-card { min-width: 0; }
+.q-card h2 { margin-bottom: 16px; font-size: 22px; line-height: 28px; }
+.tag-note { font: 400 13px/1 var(--sans); color: var(--quiet-text); margin-left: 6px; }
+.form-foot { grid-column: span 12; }
+
+/* ---------- check-in: the stroke under the current part is the only progress mark ---------- */
+.stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap); margin: 0 0 28px; padding: 0; list-style: none; }
+.stepper li { padding-bottom: 12px; color: var(--ink-mid); }
+.stepper li.done { color: var(--quiet-text); background: var(--dry-line-pale) left bottom / 100% 6px no-repeat; }
+.stepper li.now { color: var(--ink-dense); background: var(--dry-line) left bottom / 100% 7px no-repeat; }
+.question-list { display: grid; gap: 44px; margin-bottom: 12px; }
+.question { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
+.question .qn { font: 400 22px/26px var(--serif); color: var(--quiet-text); }
+.q-body { min-width: 0; }
+.question p { margin: 0 0 14px; color: var(--ink-dense); font-size: 16px; }
+.ends { display: flex; justify-content: space-between; max-width: 472px; margin-top: 6px; }
+
+/* ---------- learned: liked tags in dense ink, disliked in pale ink ---------- */
+.weights { display: grid; gap: 4px; }
+.weight { display: grid; grid-template-columns: 112px 1fr 1fr 36px; align-items: center; height: 30px; }
+.weight .neg, .weight .pos { height: 7px; position: relative; }
+.weight .neg { border-right: 1px solid var(--ink-mid); }
+.weight .neg i, .weight .pos i { position: absolute; top: 0; bottom: 0; }
+.weight .neg i { right: 0; background: var(--ink-pale); }
+.weight .pos i { left: 0; background: var(--ink-dense); }
+.weight .val { text-align: right; }
+.weight.zero .tag, .weight.zero .val { color: var(--quiet-text); }
+.axis { display: grid; grid-template-columns: 112px 1fr 1fr 36px; font-size: 12px; color: var(--quiet-text); margin-top: 6px; }
+.axis span:nth-child(2), .axis span:nth-child(3) { display: flex; justify-content: space-between; }
+.rated-block { margin-top: -36px; padding: 36px 32px; background: var(--ink-wash) center / 100% 100% no-repeat; }
+.rated { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+.rated li { display: flex; justify-content: space-between; gap: 18px; }
+.rated .r { flex: none; color: var(--quiet-text); }
+.empty { color: var(--quiet-text); padding: 18px 0; }
+
+/* ---------- narrow screens: requirement "at 760px the painting shrinks and clears the content" ---------- */
+@media (max-width: 1100px) {
+  .span-3 { grid-column: span 6; }
+  .span-8, .span-7, .span-6, .span-5, .span-4 { grid-column: span 12; }
+  main { padding: 56px 36px; }
+  .foot { padding: 0 36px 28px; }
+  .ink-art { width: 230px; height: 374px; margin: -24px 0 -80px; }
+  .hero { min-height: 280px; }
+}
+@media (max-width: 760px) {
+  :root { --fs-title: 42px; --gap: 22px; }
+  .frame { grid-template-columns: minmax(0, 1fr); }
+  .side {
+    position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center;
+    gap: 8px; padding: 16px 20px 12px;
+    background: var(--dry-line-pale) left bottom / 100% 6px no-repeat;
+  }
+  .menu-button {
+    display: inline-flex; margin-left: auto; height: 36px; align-items: center; padding: 0;
+    border: 0; background: none; cursor: pointer; text-decoration: underline; text-underline-offset: 4px;
+  }
+  .nav { flex-basis: 100%; padding: 8px 0; }
+  .nav.closed { display: none; }
+  .side-foot { display: none; }
+  .nav-signout { display: block; text-align: left; font-size: 15px; }
+  .sheet { min-height: auto; }
+  main { padding: 28px 20px 44px; }
+  .foot { padding: 0 20px 24px; }
+  /* The painting sits at the top right of the title and the text wraps clear of it */
+  .hero { min-height: 196px; gap: 0; margin-bottom: 16px; }
+  .hero-text { padding-top: 8px; padding-right: 104px; }
+  .ink-art { position: absolute; right: -14px; top: -14px; width: 120px; height: 195px; margin: 0; }
+  .lede { font-size: 16px; line-height: 25px; }
+  .notice { font-size: 16px; line-height: 25px; padding-left: 18px; }
+  .tile .value, .big-num { font-size: 44px; line-height: 48px; }
+  .rail { padding: 28px 16px; }
+  .choices.numbers .choice span { width: 36px; }
+  .stepper { gap: 8px; }
+  .weight, .axis { grid-template-columns: 88px 1fr 1fr 28px; }
+}
+
+/* ---------- motion: requirement "everything inside prefers-reduced-motion: no-preference" ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  /* The lotus leaf stirs, just barely, as if someone walked past the scroll */
+  .sway { animation: leaf-sway 9s ease-in-out infinite; }
+  @keyframes leaf-sway {
+    0%, 100% { transform: rotate(-0.7deg); }
+    50% { transform: rotate(0.9deg); }
+  }
+  .choice span { transition: background-color .15s; }
+  /* The eye rolls slowly. It never snaps. */
+  .pupil { transition: transform 1.1s ease-in-out; }
+}

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Campus Wellbeing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="frame">
+  <header class="side">
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="nav">Menu</button>
+    <nav id="nav" class="nav" hidden>
+      <a href="#today" data-view="today">Today</a>
+      <a href="#profile" data-view="profile">Profile</a>
+      <a href="#learned" data-view="learned">What it has learned</a>
+      <button type="button" class="text-button nav-signout" data-action="signout">Sign out</button>
+    </nav>
+    <div class="side-foot">
+      <div class="who" hidden>
+        <span class="avatar" aria-hidden="true"></span>
+        <span class="who-name"></span>
+        <button type="button" class="text-button" data-action="signout">Sign out</button>
+      </div>
+    </div>
+  </header>
+  <div class="sheet">
+    <main id="view" tabindex="-1"></main>
+    <footer class="foot"><p class="note">A self-reflection tool, not a diagnosis.</p></footer>
+  </div>
+</div>
+<script src="ink.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
